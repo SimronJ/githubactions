@@ -1,0 +1,62 @@
+name: DMV Availability Notifier
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: dmv-availability
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check-and-notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Ensure jq is installed
+        run: |
+          if ! command -v jq >/dev/null 2>&1; then
+            sudo apt-get update && sudo apt-get install -y jq | cat
+          fi
+
+      - name: Check DMV availability
+        id: check
+        env:
+          BEARER_TOKEN: ${{ secrets.BEARER_TOKEN }}
+          # Comma or space separated list, e.g. "33,19,29"
+          LOCATION_IDS: ${{ vars.LOCATION_IDS }}
+          TYPE_ID: ${{ vars.TYPE_ID }}
+          BASE_URL: ${{ vars.BASE_URL }}
+          START_DATE: ${{ vars.START_DATE }}
+          LOCATION_NAME_MAP: ${{ vars.LOCATION_NAME_MAP }}
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+          WEBHOOK_FORMAT: ${{ vars.WEBHOOK_FORMAT }}
+          WEBHOOK_JSON_KEY: ${{ vars.WEBHOOK_JSON_KEY }}
+        run: |
+          bash scripts/check_availability.sh
+          echo "found=$(cat .availability/found)" >> "$GITHUB_OUTPUT"
+          echo "summary<<'EOF'" >> "$GITHUB_OUTPUT"
+          cat .availability/summary.txt >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Send email notification
+        if: steps.check.outputs.found == 'true'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: DMV appointment availability found
+          to: ${{ secrets.TO_EMAIL }}
+          from: ${{ secrets.FROM_EMAIL }}
+          secure: true
+          body: ${{ steps.check.outputs.summary }}
+
+
