@@ -10,12 +10,26 @@ from typing import Dict, List, Tuple, Optional
 
 
 def read_env(name: str, default: Optional[str] = None) -> Optional[str]:
-    return os.environ.get(name, default)
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    if isinstance(value, str) and value.strip() == "":
+        return default
+    return value
 
 
 def parse_location_ids(raw: str) -> List[str]:
     raw = raw.replace(",", " ")
-    return [p for p in (s.strip() for s in raw.split()) if p]
+    result: List[str] = []
+    for piece in (s.strip() for s in raw.split()):
+        if not piece:
+            continue
+        # strip surrounding quotes and keep only digits
+        piece = piece.strip("\"'")
+        digits = "".join(ch for ch in piece if ch.isdigit())
+        if digits:
+            result.append(digits)
+    return result
 
 
 def parse_json_map(raw: Optional[str]) -> Dict[str, str]:
@@ -288,6 +302,10 @@ def main() -> int:
         f.write(summary)
     with open(found_path, "w") as f:
         f.write("true" if found_any else "false")
+
+    # Also print to stdout for local runs
+    sys.stdout.write(summary)
+    sys.stdout.flush()
 
     # Optional generic webhook
     if found_any:
