@@ -49,6 +49,27 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Send Discord webhook
+        if: steps.check.outputs.found == 'true'
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          if [ -z "${DISCORD_WEBHOOK_URL}" ]; then
+            echo "DISCORD_WEBHOOK_URL not set; skipping"
+            exit 0
+          fi
+          # Discord limit is 2000 characters; trim to be safe
+          msg=$(cat .availability/summary.txt | head -c 1900)
+          jq -Rn --arg content "$msg" '{content: $content}' > payload.json
+          echo "Posting to Discord webhook..."
+          http_code=$(curl -sS -D headers.txt -o body.txt -w "%{http_code}" \
+            -H "Content-Type: application/json" -d @payload.json "$DISCORD_WEBHOOK_URL")
+          echo "--- Response status: ${http_code}"
+          echo "--- Response headers:"
+          cat headers.txt || true
+          echo "--- Response body:"
+          cat body.txt || true
+
       # Email notification removed per request; webhook notification remains in the script
 
 
