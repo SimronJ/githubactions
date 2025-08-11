@@ -1,6 +1,8 @@
 name: DMV Availability Notifier
 
 on:
+  push:
+    branches: [master]  # or your branch
   schedule:
     - cron: "*/5 * * * *"
   workflow_dispatch: {}
