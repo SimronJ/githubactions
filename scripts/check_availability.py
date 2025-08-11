@@ -269,6 +269,10 @@ def main() -> int:
         window_days = int(read_env("DATE_WINDOW_DAYS") or 0) or None
     except Exception:
         window_days = None
+    
+    # If no window_days specified, default to 60 days to capture more appointments
+    if window_days is None:
+        window_days = 60
     weekdays_allowed = allowed_weekdays_set(read_env("WEEKDAYS"))
     try:
         week_offset = int(read_env("WEEK_OFFSET") or 0) if read_env("WEEK_OFFSET") else None
@@ -294,6 +298,7 @@ def main() -> int:
         lines, latest_dt = build_summary(
             resp, tf, tt, now_epoch, window_days, weekdays_allowed, target_weekday, week_offset
         )
+        
         if lines:
             found_any = True
             # Discord supports markdown; make the header bold as "Name ID"

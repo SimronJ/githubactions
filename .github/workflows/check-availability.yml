@@ -38,7 +38,7 @@ jobs:
           WEBHOOK_JSON_KEY: ${{ vars.WEBHOOK_JSON_KEY || 'text' }}
           TIME_FROM: ${{ vars.TIME_FROM || '' }}
           TIME_TO: ${{ vars.TIME_TO || '' }}
-          DATE_WINDOW_DAYS: ${{ vars.DATE_WINDOW_DAYS || '14' }}
+          DATE_WINDOW_DAYS: ${{ vars.DATE_WINDOW_DAYS || '60' }}
           WEEKDAYS: ${{ vars.WEEKDAYS || '' }}
           WEEK_OFFSET: ${{ vars.WEEK_OFFSET || '' }}
           TARGET_WEEKDAY: ${{ vars.TARGET_WEEKDAY || '' }}
