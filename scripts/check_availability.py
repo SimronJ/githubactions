@@ -293,7 +293,7 @@ def main() -> int:
 
     for loc in location_ids:
         resp = fetch_location(base_url, token, origin, user_agent, loc, type_id, start_date)
-        label = f"{name_map.get(str(loc), str(loc))} ({loc})" if name_map.get(str(loc)) else str(loc)
+        
         if not resp:
             display_name = name_map.get(str(loc)) or "Location"
             display_id = str(loc)
