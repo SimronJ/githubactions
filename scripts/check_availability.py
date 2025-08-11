@@ -10,12 +10,7 @@ from typing import Dict, List, Tuple, Optional
 
 
 def read_env(name: str, default: Optional[str] = None) -> Optional[str]:
-    value = os.environ.get(name)
-    if value is None:
-        return default
-    if isinstance(value, str) and value.strip() == "":
-        return default
-    return value
+    return os.environ.get(name, default)
 
 
 def parse_location_ids(raw: str) -> List[str]:
@@ -30,18 +25,6 @@ def parse_location_ids(raw: str) -> List[str]:
         if digits:
             result.append(digits)
     return result
-
-
-def parse_json_map(raw: Optional[str]) -> Dict[str, str]:
-    if not raw:
-        return {}
-    try:
-        value = json.loads(raw)
-        if isinstance(value, dict):
-            return {str(k): str(v) for k, v in value.items()}
-    except Exception:
-        pass
-    return {}
 
 
 def iso_now_utc() -> str:
@@ -270,7 +253,15 @@ def main() -> int:
         return 0
 
     location_ids = parse_location_ids(location_ids_raw)
-    name_map = parse_json_map(read_env("LOCATION_NAME_MAP"))
+    
+    # Hardcoded location name mapping
+    name_map = {
+        "22": "Bethpage",
+        "29": "Garden City", 
+        "33": "Springfield",
+        "19": "Jamaica",
+        "36": "College Point"
+    }
 
     tf = to_minutes_24h(read_env("TIME_FROM"))
     tt = to_minutes_24h(read_env("TIME_TO"))
