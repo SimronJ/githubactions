@@ -22,10 +22,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Ensure jq is installed
-        run: |
-          if ! command -v jq >/dev/null 2>&1; then
-            sudo apt-get update && sudo apt-get install -y jq | cat
-          fi
+        run: echo "jq no longer required"
 
       - name: Check DMV availability
         id: check
@@ -40,8 +37,14 @@ jobs:
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
           WEBHOOK_FORMAT: ${{ vars.WEBHOOK_FORMAT }}
           WEBHOOK_JSON_KEY: ${{ vars.WEBHOOK_JSON_KEY }}
+          TIME_FROM: ${{ vars.TIME_FROM }}
+          TIME_TO: ${{ vars.TIME_TO }}
+          DATE_WINDOW_DAYS: ${{ vars.DATE_WINDOW_DAYS }}
+          WEEKDAYS: ${{ vars.WEEKDAYS }}
+          WEEK_OFFSET: ${{ vars.WEEK_OFFSET }}
+          TARGET_WEEKDAY: ${{ vars.TARGET_WEEKDAY }}
         run: |
-          bash scripts/check_availability.sh
+          python3 scripts/check_availability.py
           echo "found=$(cat .availability/found)" >> "$GITHUB_OUTPUT"
           {
             echo "summary<<EOF"
