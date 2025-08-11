@@ -1,0 +1,17 @@
+# Local environment files
+.env
+.env.*
+!.env.example
+.env.local
+.secrets
+
+# Local outputs
+.availability/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
