@@ -154,11 +154,13 @@ def build_summary(
     weekdays_allowed: Optional[set],
     target_weekday: Optional[int],
     week_offset: Optional[int],
-) -> List[str]:
+) -> Tuple[List[str], Optional[datetime]]:
+    # Collect per-day entries first so we can sort by date (latest → oldest)
     lines: List[str] = []
+    entries: List[Tuple[datetime, str]] = []
     dates = resp.get("LocationAvailabilityDates") or []
     if not isinstance(dates, list):
-        return lines
+        return lines, None
 
     now_midnight = (now_epoch // 86400) * 86400
 
@@ -216,9 +218,13 @@ def build_summary(
 
         date_str = avail_date.strftime("%Y-%m-%d")
         times_str = ", ".join(f"{fmt_24(a)}-{fmt_24(b)}" for a, b in ranges)
-        lines.append(f"  - {date_str}: {times_str}")
-
-    return lines
+        entries.append((avail_date, f"  - {date_str}: {times_str}"))
+    # Sort newest first for easier scanning and limit to top 5
+    entries.sort(key=lambda x: x[0], reverse=True)
+    entries = entries[:5]
+    lines = [line for _, line in entries]
+    latest_dt: Optional[datetime] = entries[0][0] if entries else None
+    return lines, latest_dt
 
 
 def post_webhook(url: str, summary: str, fmt: str, json_key: str) -> Tuple[int, str]:
@@ -279,24 +285,47 @@ def main() -> int:
     target_weekday = weekday_to_num(read_env("TARGET_WEEKDAY") or "") if read_env("TARGET_WEEKDAY") else None
     now_epoch = int(read_env("NOW_EPOCH", str(int(datetime.now(timezone.utc).timestamp()))))
 
+    # Build per-location blocks so we can sort locations by their latest available date
     all_lines: List[str] = []
+    location_blocks: List[Tuple[Optional[datetime], str]] = []
     found_any = False
 
     for loc in location_ids:
         resp = fetch_location(base_url, token, origin, user_agent, loc, type_id, start_date)
         label = f"{name_map.get(str(loc), str(loc))} ({loc})" if name_map.get(str(loc)) else str(loc)
         if not resp:
-            all_lines.append(f"Location {label}\n")
+            all_lines.append(f"**Location {label}**\n")
             continue
 
-        lines = build_summary(resp, tf, tt, now_epoch, window_days, weekdays_allowed, target_weekday, week_offset)
+        lines, latest_dt = build_summary(
+            resp, tf, tt, now_epoch, window_days, weekdays_allowed, target_weekday, week_offset
+        )
         if lines:
             found_any = True
-            all_lines.append(f"Location {label}\n" + "\n".join(lines) + "\n")
+            # Discord supports markdown; make the header bold
+            block_text = f"**{label}**\n" + "\n".join(lines) + "\n"
+            location_blocks.append((latest_dt, block_text))
         else:
-            all_lines.append(f"Location {label}\n")
+            all_lines.append(f"**{label}**\n")
 
-    summary = "\n".join(all_lines).rstrip() + "\n"
+    # Sort locations by their latest available date ascending (earlier latest first),
+    # then append any locations with no availability at the end in original order.
+    if location_blocks:
+        # Sort by latest date descending (latest latest first). Keep None at the end.
+        location_blocks.sort(key=lambda x: (x[0] is None, -(x[0].timestamp() if x[0] else 0)))
+        sorted_blocks = [blk for _, blk in location_blocks]
+    else:
+        sorted_blocks = []
+
+    summary_parts: List[str] = []
+    if sorted_blocks:
+        summary_parts.append("\n".join(sorted_blocks).rstrip())
+    if all_lines:
+        summary_parts.append("\n".join(all_lines).rstrip())
+
+    # Footer link for convenience
+    summary = ("\n\n".join([p for p in summary_parts if p]) + "\n\n" +
+               "new york dmv appointment: @https://public.nydmvreservation.com/").rstrip() + "\n"
 
     with open(summary_path, "w") as f:
         f.write(summary)
