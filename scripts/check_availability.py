@@ -211,27 +211,6 @@ def build_summary(
     return lines, latest_dt
 
 
-def post_webhook(url: str, summary: str, fmt: str, json_key: str) -> Tuple[int, str]:
-    try:
-        if fmt.lower() == "json":
-            data = json.dumps({json_key: summary}).encode("utf-8")
-            req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
-        else:
-            data = summary.encode("utf-8")
-            req = urllib.request.Request(url, data=data, headers={"Content-Type": "text/plain"})
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            body = resp.read().decode("utf-8", errors="replace")
-            return resp.status, body
-    except urllib.error.HTTPError as e:
-        try:
-            body = e.read().decode("utf-8", errors="replace")
-        except Exception:
-            body = str(e)
-        return e.code, body
-    except Exception as e:
-        return 0, str(e)
-
-
 def main() -> int:
     os.makedirs(".availability", exist_ok=True)
     summary_path = ".availability/summary.txt"
@@ -340,14 +319,6 @@ def main() -> int:
     # Also print to stdout for local runs
     sys.stdout.write(summary)
     sys.stdout.flush()
-
-    # Optional generic webhook
-    if found_any:
-        webhook_url = read_env("WEBHOOK_URL", "") or ""
-        if webhook_url:
-            fmt = read_env("WEBHOOK_FORMAT", "text") or "text"
-            json_key = read_env("WEBHOOK_JSON_KEY", "text") or "text"
-            post_webhook(webhook_url, summary, fmt, json_key)
 
     return 0
 

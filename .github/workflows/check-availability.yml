@@ -33,9 +33,6 @@ jobs:
           TYPE_ID: ${{ vars.TYPE_ID || '204' }}
           BASE_URL: ${{ vars.BASE_URL || 'https://publicwebsiteapi.nydmvreservation.com/api/AvailableLocationDates' }}
           START_DATE: ${{ vars.START_DATE || '' }}
-          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
-          WEBHOOK_FORMAT: ${{ vars.WEBHOOK_FORMAT || 'text' }}
-          WEBHOOK_JSON_KEY: ${{ vars.WEBHOOK_JSON_KEY || 'text' }}
           TIME_FROM: ${{ vars.TIME_FROM || '' }}
           TIME_TO: ${{ vars.TIME_TO || '' }}
           DATE_WINDOW_DAYS: ${{ vars.DATE_WINDOW_DAYS || '60' }}
