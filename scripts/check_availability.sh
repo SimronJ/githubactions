@@ -20,6 +20,13 @@ LOCATION_NAME_MAP=${LOCATION_NAME_MAP:-""}
 WEBHOOK_URL=${WEBHOOK_URL:-""}
 WEBHOOK_FORMAT=${WEBHOOK_FORMAT:-"text"} # supported: text, json
 WEBHOOK_JSON_KEY=${WEBHOOK_JSON_KEY:-"text"}
+TIME_FROM=${TIME_FROM:-""} # e.g., 09:00 (24h)
+TIME_TO=${TIME_TO:-""}   # e.g., 12:00 (24h)
+DATE_WINDOW_DAYS=${DATE_WINDOW_DAYS:-""} # e.g., 14
+WEEKDAYS=${WEEKDAYS:-""} # e.g., "Tuesday,Wednesday" or "2,3"
+WEEK_OFFSET=${WEEK_OFFSET:-""} # integer weeks, e.g., 2
+TARGET_WEEKDAY=${TARGET_WEEKDAY:-""} # e.g., Tuesday or number 2 (Mon=1..Sun=7)
+NOW_EPOCH=${NOW_EPOCH:-"$(date -u +%s)"}
 
 if [[ -z "$BEARER_TOKEN" ]]; then
   echo "BEARER_TOKEN is required (set it as a repository secret)." >&2
@@ -87,14 +94,92 @@ for id in $ids_str; do
     found_any=true
     {
       echo "Location $(get_location_label "$id") — available time slots found:"
-      jq -r '
-        .LocationAvailabilityDates[]? 
-        | select((.AvailableTimeSlots // []) | length > 0)
-        | "  - "
-          + (.FormattedAvailabilityDate // .AvailabilityDate)
-          + " (" + (.DayOfWeek // "") + ")"
-          + ": "
-          + ((.AvailableTimeSlots // []) | map(.FormattedTime // .StartDateTime) | join(", "))
+      jq -r \
+        --arg time_from "$TIME_FROM" \
+        --arg time_to "$TIME_TO" \
+        --argjson now_epoch "$NOW_EPOCH" \
+        --arg wnd "$DATE_WINDOW_DAYS" \
+        --arg weekdays "$WEEKDAYS" \
+        --arg woff "$WEEK_OFFSET" \
+        --arg target_wd "$TARGET_WEEKDAY" '
+        def to_min($s): if ($s == null or $s == "") then null else ($s | split(":") | (.[0]|tonumber)*60 + (.[1]|tonumber)) end;
+        def fmt_min($m):
+          ($m/60|floor) as $h | ($m%60) as $mi
+          | ($h%12) as $hh | ($hh | if .==0 then 12 else . end) as $h12
+          | ($mi|tostring | if length==1 then "0"+. else . end) as $mm
+          | ($h >= 12 ? "PM" : "AM") as $ampm
+          | "\($h12):\($mm) \($ampm)";
+        def dayname_to_num($n):
+          ( $n | ascii_downcase ) as $d
+          | if $d == "monday" then 1
+            elif $d == "tuesday" then 2
+            elif $d == "wednesday" then 3
+            elif $d == "thursday" then 4
+            elif $d == "friday" then 5
+            elif $d == "saturday" then 6
+            elif $d == "sunday" then 7
+            else null end;
+        def avail_midnight_epoch:
+          (.AvailabilityDate | strptime("%Y-%m-%dT%H:%M:%S") | mktime) as $e
+          | (($e / 86400 | floor) * 86400);
+        def now_midnight: (($now_epoch / 86400 | floor) * 86400);
+        def within_window:
+          (if ($wnd | length) == 0 then true else ($wnd|tonumber) end) as $win
+          | if $win == true then true
+            else ((avail_midnight_epoch - now_midnight) / 86400) as $dd | ($dd >= 0 and $dd <= $win)
+            end;
+        def weekday_allowed:
+          if ($weekdays | length) == 0 then true
+          else
+            # Build allowed set from names or numbers
+            ($weekdays | split(",") | map(. | gsub("^\\s+|\\s+$"; "") | ascii_downcase)) as $items
+            | (.DayOfWeek | ascii_downcase) as $dn
+            | ( [ $items[] | if test("^[0-9]+$") then .|tonumber else dayname_to_num(.) end ] ) as $nums
+            | ( ( ( [ $dn ] | map(dayname_to_num(.)) )[0] ) ) as $cur
+            | any($nums[]; . == $cur)
+          end;
+        def matches_target:
+          if (($woff|length) == 0) or (($target_wd|length) == 0) then true
+          else
+            ( ($target_wd | if test("^[0-9]+$") then .|tonumber else dayname_to_num(.) end) ) as $t
+            | ( ($now_epoch | strftime("%u") | tonumber) ) as $nw
+            | ( ($t - $nw + 7) % 7 + (($woff|tonumber) * 7) ) as $days
+            | ( now_midnight + ($days * 86400) ) as $target_epoch
+            | avail_midnight_epoch == $target_epoch
+          end;
+        ($time_from | to_min) as $tf | ($time_to | to_min) as $tt
+        .LocationAvailabilityDates[]?
+        | ( .AvailableTimeSlots // [] ) as $slots
+        | select(($slots | length) > 0)
+        | select(within_window)
+        | select(weekday_allowed)
+        | select(matches_target)
+        | [ $slots[]
+            | (.StartDateTime | strptime("%Y-%m-%dT%H:%M:%S")) as $dt
+            | ($dt[3]*60 + $dt[4]) as $start
+            | (.Duration // 15) as $dur
+            | {start: $start, end: ($start + $dur)}
+            | select( ($tf == null or .start >= $tf) and ($tt == null or .start < $tt) )
+          ] as $times
+        | select(($times | length) > 0)
+        | ($times | sort_by(.start)
+           | reduce .[] as $s (
+               [];
+               if (length==0) then
+                 [ {s: $s.start, e: $s.end} ]
+               else
+                 (.[-1]) as $last
+                 | if $s.start == $last.e then
+                     (.[0:-1] + [ $last | .e = $s.end ])
+                   else
+                     . + [ {s: $s.start, e: $s.end} ]
+                   end
+               end
+             )
+           | map( fmt_min(.s) + "–" + fmt_min(.e) )
+           | join(", ")
+          ) as $ranges
+        | "  - " + (.FormattedAvailabilityDate // .AvailabilityDate) + " (" + (.DayOfWeek // "") + "): " + $ranges
       ' .availability/resp.json
       echo "  API URL: ${url}"
       echo
