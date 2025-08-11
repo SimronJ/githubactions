@@ -43,9 +43,11 @@ jobs:
         run: |
           bash scripts/check_availability.sh
           echo "found=$(cat .availability/found)" >> "$GITHUB_OUTPUT"
-          echo "summary<<'EOF'" >> "$GITHUB_OUTPUT"
-          cat .availability/summary.txt >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+          {
+            echo "summary<<EOF"
+            cat .availability/summary.txt
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Send email notification
         if: steps.check.outputs.found == 'true'
