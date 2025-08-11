@@ -101,7 +101,8 @@ for id in $ids_str; do
         --arg wnd "$DATE_WINDOW_DAYS" \
         --arg weekdays "$WEEKDAYS" \
         --arg woff "$WEEK_OFFSET" \
-        --arg target_wd "$TARGET_WEEKDAY" '
+        --arg target_wd "$TARGET_WEEKDAY" \
+        -f /dev/stdin .availability/resp.json <<'JQ'
         def to_min($s): if ($s == null or $s == "") then null else ($s | split(":") | (.[0]|tonumber)*60 + (.[1]|tonumber)) end;
         def fmt_min($m):
           ($m/60|floor) as $h | ($m%60) as $mi
@@ -180,7 +181,7 @@ for id in $ids_str; do
            | join(", ")
           ) as $ranges
         | "  - " + (.FormattedAvailabilityDate // .AvailabilityDate) + " (" + (.DayOfWeek // "") + "): " + $ranges
-      ' .availability/resp.json
+JQ
       echo "  API URL: ${url}"
       echo
     } >> "$summary_file"
