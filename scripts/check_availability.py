@@ -216,9 +216,10 @@ def build_summary(
         if not ranges:
             continue
 
-        date_str = avail_date.strftime("%Y-%m-%d")
+        # Example: Monday, Sep 30: 07:30-16:45  (two spaces at end for Discord line break)
+        dow_mon_day = f"{avail_date.strftime('%A, %b')} {avail_date.day}"
         times_str = ", ".join(f"{fmt_24(a)}-{fmt_24(b)}" for a, b in ranges)
-        entries.append((avail_date, f"  - {date_str}: {times_str}"))
+        entries.append((avail_date, f"{dow_mon_day}: {times_str}  "))
     # Sort newest first for easier scanning and limit to top 5
     entries.sort(key=lambda x: x[0], reverse=True)
     entries = entries[:5]
@@ -294,7 +295,9 @@ def main() -> int:
         resp = fetch_location(base_url, token, origin, user_agent, loc, type_id, start_date)
         label = f"{name_map.get(str(loc), str(loc))} ({loc})" if name_map.get(str(loc)) else str(loc)
         if not resp:
-            all_lines.append(f"**Location {label}**\n")
+            display_name = name_map.get(str(loc)) or "Location"
+            display_id = str(loc)
+            all_lines.append(f"**{display_name} {display_id}**\n")
             continue
 
         lines, latest_dt = build_summary(
@@ -302,11 +305,15 @@ def main() -> int:
         )
         if lines:
             found_any = True
-            # Discord supports markdown; make the header bold
-            block_text = f"**{label}**\n" + "\n".join(lines) + "\n"
+            # Discord supports markdown; make the header bold as "Name ID"
+            display_name = name_map.get(str(loc)) or "Location"
+            display_id = str(loc)
+            block_text = f"**{display_name} {display_id}**\n" + "\n".join(lines) + "\n"
             location_blocks.append((latest_dt, block_text))
         else:
-            all_lines.append(f"**{label}**\n")
+            display_name = name_map.get(str(loc)) or "Location"
+            display_id = str(loc)
+            all_lines.append(f"**{display_name} {display_id}**\n")
 
     # Sort locations by their latest available date ascending (earlier latest first),
     # then append any locations with no availability at the end in original order.
@@ -323,9 +330,11 @@ def main() -> int:
     if all_lines:
         summary_parts.append("\n".join(all_lines).rstrip())
 
-    # Footer link for convenience
-    summary = ("\n\n".join([p for p in summary_parts if p]) + "\n\n" +
-               "new york dmv appointment: @https://public.nydmvreservation.com/").rstrip() + "\n"
+    # Title and footer link for convenience
+    body = "\n\n".join([p for p in summary_parts if p]).rstrip()
+    title = "**📅 DMV Appointments Available**\n\n" if body else ""
+    footer = "\n\n🔗 https://public.nydmvreservation.com/"
+    summary = (title + body + footer).rstrip() + "\n"
 
     with open(summary_path, "w") as f:
         f.write(summary)
